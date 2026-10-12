@@ -1,0 +1,16 @@
+[package]
+name = "opendictate"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "opendictate"
+path = "src/main.rs"
+
+[dependencies]
+opendictate-core = { path = "../opendictate-core" }
+opendictate-stt = { path = "../opendictate-stt" }
+opendictate-input = { path = "../opendictate-input" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+evdev = "0.12"
