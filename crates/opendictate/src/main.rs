@@ -52,6 +52,15 @@ fn main() -> Result<()> {
     eprintln!("-> Отпустите клавишу, чтобы закончить фразу и скопировать текст.");
     eprintln!("(Текст копируется в системный буфер обмена: доступен по Ctrl+V)\n");
 
+    let is_recording_bool = Arc::new(std::sync::Mutex::new(false));
+    let lang_mutex = Arc::new(std::sync::Mutex::new(args.language.clone()));
+
+    // Запускаем системный трей (ksni)
+    let tray_handle = opendictate_tray::spawn_tray(is_recording_bool.clone(), lang_mutex.clone()).ok();
+    if tray_handle.is_some() {
+        eprintln!("[init] Иконка в системном трее активна.");
+    }
+
     let is_recording = Arc::new(AtomicBool::new(false));
 
     // Находим клавиатурные устройства в /dev/input/event*
@@ -91,11 +100,25 @@ fn main() -> Result<()> {
         if pressed {
             if !is_recording.load(Ordering::Relaxed) {
                 is_recording.store(true, Ordering::Relaxed);
+                if let Ok(mut r) = is_recording_bool.lock() {
+                    *r = true;
+                }
+                if let Some(t) = &tray_handle {
+                    t.update(|_| {});
+                }
                 eprintln!("\n[mic] ● Слушаю... (клавиша {:?} зажата)", key);
+                opendictate_core::sound::play_start_sound();
                 recorder.start();
             }
         } else if is_recording.load(Ordering::Relaxed) {
             is_recording.store(false, Ordering::Relaxed);
+            if let Ok(mut r) = is_recording_bool.lock() {
+                *r = false;
+            }
+            if let Some(t) = &tray_handle {
+                t.update(|_| {});
+            }
+            opendictate_core::sound::play_stop_sound();
             eprintln!("[mic] Запись завершена. Распознавание нейросетью...");
             let audio_samples = recorder.stop();
 
@@ -104,8 +127,9 @@ fn main() -> Result<()> {
                 continue;
             }
 
+            let current_lang = lang_mutex.lock().map(|l| l.clone()).unwrap_or_else(|_| "ru".into());
             let start = Instant::now();
-            match stt.transcribe(&audio_samples, Some(&args.language)) {
+            match stt.transcribe(&audio_samples, Some(&current_lang)) {
                 Ok(text) => {
                     let elapsed = start.elapsed().as_millis();
                     if text.is_empty() {

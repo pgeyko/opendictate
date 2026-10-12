@@ -10,6 +10,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+pub mod sound;
+
 pub const TARGET_SAMPLE_RATE: u32 = 16000;
 
 #[derive(Clone)]

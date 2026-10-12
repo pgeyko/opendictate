@@ -73,8 +73,12 @@ fn clean_transcription(raw: &str) -> String {
     let mut lines = Vec::new();
     for line in raw.lines() {
         let trimmed = line.trim();
-        // whisper-cli может выводить системные логи в квадратных скобках
-        if !trimmed.is_empty() && !trimmed.starts_with('[') {
+        // Отсекаем логи и галлюцинации Whisper на тишине («Редактор субтитров...»)
+        if !trimmed.is_empty() 
+            && !trimmed.starts_with('[') 
+            && !trimmed.contains("Редактор субтитров")
+            && !trimmed.contains("Корректор")
+        {
             lines.push(trimmed);
         }
     }

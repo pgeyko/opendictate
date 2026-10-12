@@ -11,6 +11,7 @@ path = "src/main.rs"
 opendictate-core = { path = "../opendictate-core" }
 opendictate-stt = { path = "../opendictate-stt" }
 opendictate-input = { path = "../opendictate-input" }
+opendictate-tray = { path = "../opendictate-tray" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 evdev = "0.12"

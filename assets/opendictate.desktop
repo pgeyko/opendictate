@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=OpenDictate
+Name[ru]=OpenDictate
+GenericName=Voice Typing
+GenericName[ru]=Голосовая диктовка
+Comment=Lightweight offline voice typing for Linux powered by Whisper
+Comment[ru]=Быстрая офлайн-диктовка текста голосом для Linux на базе Whisper
+Exec=opendictate
+Icon=opendictate
+Terminal=false
+Type=Application
+Categories=Utility;Accessibility;
+Keywords=voice;speech;dictation;stt;whisper;typing;
+StartupNotify=false

@@ -3,6 +3,7 @@ members = [
     "crates/opendictate-core",
     "crates/opendictate-stt",
     "crates/opendictate-input",
+    "crates/opendictate-tray",
     "crates/opendictate",
 ]
 resolver = "2"
