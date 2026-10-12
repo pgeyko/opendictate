@@ -1,0 +1,12 @@
+# Rust
+target/
+Cargo.lock
+
+# Whisper models (downloaded on demand)
+models/*.bin
+models/*.gguf
+
+# Runtime and local files
+*.log
+*.wav
+/tmp/
