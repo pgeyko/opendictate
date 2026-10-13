@@ -68,7 +68,7 @@ impl AutoPaster {
     }
 
     fn open() -> Result<evdev::uinput::VirtualDevice> {
-        use evdev::{AttributeSet, EventType, InputEvent, Key};
+        use evdev::{AttributeSet, Key};
         let mut keys = AttributeSet::<Key>::new();
         keys.insert(Key::KEY_LEFTCTRL);
         keys.insert(Key::KEY_V);

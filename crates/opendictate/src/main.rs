@@ -10,12 +10,14 @@ use clap::Parser;
 use evdev::{Device, Key};
 use opendictate_core::AudioRecorder;
 use opendictate_input::TextInjector;
-use opendictate_stt::{default_model_path, SttEngine};
+use opendictate_stt::SttEngine;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
+
+mod control;
 
 #[derive(Parser, Debug)]
 #[command(name = "opendictate", about = "OpenDictate: voice typing for Linux")]
@@ -79,7 +81,6 @@ fn main() -> Result<()> {
     eprintln!("[init] Инициализация движка Whisper: {}", model_path.display());
     let mut stt = SttEngine::new_with_download(&model_path, model_url)?;
     eprintln!("[init] Движок Whisper готов!");
-    let mut loaded_model = args.model.clone();
 
     let recorder = AudioRecorder::new();
     let _audio_stream = recorder.spawn_stream()?;
@@ -108,6 +109,9 @@ fn main() -> Result<()> {
     let is_recording_bool = Arc::new(std::sync::Mutex::new(false));
     let lang_mutex = Arc::new(std::sync::Mutex::new(args.language.clone()));
     let model_mutex = Arc::new(std::sync::Mutex::new(args.model.clone()));
+    let loaded_mutex = Arc::new(std::sync::Mutex::new(args.model.clone()));
+    let prompt_mutex = Arc::new(std::sync::Mutex::new(args.prompt.clone().unwrap_or_default()));
+    let last_mutex = Arc::new(std::sync::Mutex::new((String::new(), 0u128)));
 
     // Запускаем системный трей (ksni)
     let tray_handle = opendictate_tray::spawn_tray(
@@ -120,6 +124,22 @@ fn main() -> Result<()> {
     if tray_handle.is_some() {
         eprintln!("[init] Иконка в системном трее активна.");
     }
+
+    // Control-сокет для GUI/CLI (статус + set без рестарта).
+    let shared = control::Shared {
+        lang: lang_mutex.clone(),
+        model: model_mutex.clone(),
+        loaded_model: loaded_mutex.clone(),
+        auto_paste: auto_paste_mutex.clone(),
+        prompt: prompt_mutex.clone(),
+        recording: is_recording_bool.clone(),
+        last: last_mutex.clone(),
+    };
+    std::thread::spawn(move || {
+        if let Err(e) = control::serve(shared) {
+            eprintln!("[ctl] control socket error: {e:#}");
+        }
+    });
 
     let is_recording = Arc::new(AtomicBool::new(false));
 
@@ -188,29 +208,39 @@ fn main() -> Result<()> {
             }
 
             let current_lang = lang_mutex.lock().map(|l| l.clone()).unwrap_or_else(|_| "ru".into());
-            // Хот-релоад модели, если в трее выбрали другую.
+            // Хот-релоад модели, если в трее/GUI выбрали другую.
             let wanted_model = model_mutex.lock().map(|m| m.clone()).unwrap_or_else(|_| "base".into());
-            if wanted_model != loaded_model {
-                eprintln!("[stt] Смена модели {loaded_model} -> {wanted_model}, перезагружаю...");
+            let loaded_now = loaded_mutex.lock().map(|m| m.clone()).unwrap_or_else(|_| "base".into());
+            if wanted_model != loaded_now {
+                eprintln!("[stt] Смена модели {loaded_now} -> {wanted_model}, перезагружаю...");
                 let (mpath, murl) = resolve_model_spec(&wanted_model);
                 match SttEngine::new_with_download(&mpath, murl) {
                     Ok(engine) => {
                         stt = engine;
-                        loaded_model = wanted_model.clone();
+                        if let Ok(mut m) = loaded_mutex.lock() {
+                            *m = wanted_model.clone();
+                        }
                         eprintln!("[stt] Модель {wanted_model} готова");
                     }
                     Err(e) => {
-                        eprintln!("[stt] Не удалось загрузить {wanted_model}: {e:#}, остаюсь на {loaded_model}");
+                        eprintln!("[stt] Не удалось загрузить {wanted_model}: {e:#}, остаюсь на {loaded_now}");
                         if let Ok(mut m) = model_mutex.lock() {
-                            *m = loaded_model.clone();
+                            *m = loaded_now.clone();
                         }
                     }
                 }
             }
-            let prompt = args.prompt.as_deref().unwrap_or(opendictate_stt::DEFAULT_PROMPT);
+            let prompt_cfg = prompt_mutex.lock().map(|p| p.clone()).unwrap_or_default();
+            let prompt_owned: String = if prompt_cfg.is_empty() {
+                args.prompt
+                    .clone()
+                    .unwrap_or_else(|| opendictate_stt::DEFAULT_PROMPT.to_string())
+            } else {
+                prompt_cfg
+            };
             let opts = opendictate_stt::TranscribeOpts {
                 language: &current_lang,
-                prompt,
+                prompt: &prompt_owned,
                 beam_size: args.beam,
                 ..Default::default()
             };
@@ -218,6 +248,9 @@ fn main() -> Result<()> {
             match stt.transcribe(&audio_samples, &opts) {
                 Ok(text) => {
                     let elapsed = start.elapsed().as_millis();
+                    if let Ok(mut l) = last_mutex.lock() {
+                        *l = (text.clone(), elapsed);
+                    }
                     if text.is_empty() {
                         eprintln!("[stt] Речь не распознана.");
                     } else {

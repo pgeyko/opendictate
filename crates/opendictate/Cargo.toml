@@ -15,3 +15,5 @@ opendictate-tray = { path = "../opendictate-tray" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 evdev = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
