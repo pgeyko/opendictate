@@ -20,17 +20,40 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(name = "opendictate", about = "OpenDictate: voice typing for Linux")]
 struct Args {
-    /// Язык распознавания (по умолчанию ru)
+    /// Язык распознавания: ru | en | auto
     #[arg(short, long, default_value = "ru")]
     language: String,
 
-    /// Путь к весам модели whisper (.bin)
-    #[arg(short, long)]
-    model: Option<PathBuf>,
+    /// Модель whisper: имя пресета (tiny|base|small|turbo|...) или путь к .bin
+    #[arg(short, long, default_value = "base")]
+    model: String,
+
+    /// Beam size декодера (точность; 5 по умолчанию)
+    #[arg(long, default_value = "5")]
+    beam: u32,
+
+    /// Initial prompt (подсказка-контекст; пусто = встроенный IT-пrompt)
+    #[arg(long)]
+    prompt: Option<String>,
 
     /// Включить отладочный режим с подробными логами
     #[arg(short, long, default_value = "false")]
     debug: bool,
+}
+
+/// Резолв спеки модели в (путь, опциональный URL для докачки).
+fn resolve_model_spec(spec: &str) -> (PathBuf, Option<String>) {
+    use opendictate_stt::{preset_url, resolve_model};
+    let path = resolve_model(spec);
+    if path.exists() {
+        return (path, None);
+    }
+    // Имя пресета без файла -> качаем по URL пресета.
+    if let Some(url) = preset_url(spec) {
+        return (path, Some(url));
+    }
+    // Путь, которого нет, без URL — SttEngine выдаст понятную ошибку.
+    (path, None)
 }
 
 fn main() -> Result<()> {
@@ -48,10 +71,11 @@ fn main() -> Result<()> {
         eprintln!("=======================================================");
     }
 
-    let model_path = args.model.unwrap_or_else(default_model_path);
+    let (model_path, model_url) = resolve_model_spec(&args.model);
     eprintln!("[init] Инициализация движка Whisper: {}", model_path.display());
-    let mut stt = SttEngine::new(&model_path)?;
+    let mut stt = SttEngine::new_with_download(&model_path, model_url)?;
     eprintln!("[init] Движок Whisper готов!");
+    let mut loaded_model = args.model.clone();
 
     let recorder = AudioRecorder::new();
     let _audio_stream = recorder.spawn_stream()?;
@@ -70,9 +94,15 @@ fn main() -> Result<()> {
 
     let is_recording_bool = Arc::new(std::sync::Mutex::new(false));
     let lang_mutex = Arc::new(std::sync::Mutex::new(args.language.clone()));
+    let model_mutex = Arc::new(std::sync::Mutex::new(args.model.clone()));
 
     // Запускаем системный трей (ksni)
-    let tray_handle = opendictate_tray::spawn_tray(is_recording_bool.clone(), lang_mutex.clone()).ok();
+    let tray_handle = opendictate_tray::spawn_tray(
+        is_recording_bool.clone(),
+        lang_mutex.clone(),
+        model_mutex.clone(),
+    )
+    .ok();
     if tray_handle.is_some() {
         eprintln!("[init] Иконка в системном трее активна.");
     }
@@ -144,8 +174,34 @@ fn main() -> Result<()> {
             }
 
             let current_lang = lang_mutex.lock().map(|l| l.clone()).unwrap_or_else(|_| "ru".into());
+            // Хот-релоад модели, если в трее выбрали другую.
+            let wanted_model = model_mutex.lock().map(|m| m.clone()).unwrap_or_else(|_| "base".into());
+            if wanted_model != loaded_model {
+                eprintln!("[stt] Смена модели {loaded_model} -> {wanted_model}, перезагружаю...");
+                let (mpath, murl) = resolve_model_spec(&wanted_model);
+                match SttEngine::new_with_download(&mpath, murl) {
+                    Ok(engine) => {
+                        stt = engine;
+                        loaded_model = wanted_model.clone();
+                        eprintln!("[stt] Модель {wanted_model} готова");
+                    }
+                    Err(e) => {
+                        eprintln!("[stt] Не удалось загрузить {wanted_model}: {e:#}, остаюсь на {loaded_model}");
+                        if let Ok(mut m) = model_mutex.lock() {
+                            *m = loaded_model.clone();
+                        }
+                    }
+                }
+            }
+            let prompt = args.prompt.as_deref().unwrap_or(opendictate_stt::DEFAULT_PROMPT);
+            let opts = opendictate_stt::TranscribeOpts {
+                language: &current_lang,
+                prompt,
+                beam_size: args.beam,
+                ..Default::default()
+            };
             let start = Instant::now();
-            match stt.transcribe(&audio_samples, Some(&current_lang)) {
+            match stt.transcribe(&audio_samples, &opts) {
                 Ok(text) => {
                     let elapsed = start.elapsed().as_millis();
                     if text.is_empty() {
