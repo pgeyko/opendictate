@@ -47,6 +47,10 @@ struct State {
     last_text: String,
     #[serde(default)]
     last_ms: u128,
+    #[serde(default)]
+    hotkey: String,
+    #[serde(default)]
+    hotkey_mode: String,
 }
 
 fn sock_path() -> PathBuf {
@@ -214,12 +218,22 @@ fn build_ui(app: &adw::Application, guard: Rc<RefCell<DaemonGuard>>) {
     let paste = gtk::Switch::new();
     paste.set_valign(gtk::Align::Center);
     paste_row.add_suffix(&paste);
-    let hotkey_row = adw::ActionRow::builder()
-        .title("Горячая клавиша")
-        .subtitle("Pause / ScrollLock / F12 (удерживать и говорить)")
+    let hotkey_row = adw::ComboRow::new();
+    hotkey_row.set_title("Горячая клавиша");
+    hotkey_row.set_subtitle("Применяется сразу, без рестарта");
+    let hotkey_names = ["Pause", "F12", "ScrollLock"];
+    let hotkey_vals = ["pause", "f12", "scrolllock"];
+    hotkey_row.set_model(Some(&gtk::StringList::new(&hotkey_names)));
+    let mode_row = adw::ActionRow::builder()
+        .title("Режим тоггл")
+        .subtitle("Выкл: удерживать и говорить. Вкл: нажал — пишет, нажал — вставил")
         .build();
+    let mode = gtk::Switch::new();
+    mode.set_valign(gtk::Align::Center);
+    mode_row.add_suffix(&mode);
     card_input.add(&paste_row);
     card_input.add(&hotkey_row);
+    card_input.add(&mode_row);
 
     // Начальное состояние (без эха: сначала выставить, потом подписать).
     if let Some(st) = send("{\"status\":true}") {
@@ -230,6 +244,10 @@ fn build_ui(app: &adw::Application, guard: Rc<RefCell<DaemonGuard>>) {
             lang_row.set_selected(i as u32);
         }
         paste.set_active(st.auto_paste);
+        if let Some(i) = hotkey_vals.iter().position(|v| *v == st.hotkey) {
+            hotkey_row.set_selected(i as u32);
+        }
+        mode.set_active(st.hotkey_mode == "toggle");
     }
 
     model_row.connect_selected_notify({
@@ -255,6 +273,17 @@ fn build_ui(app: &adw::Application, guard: Rc<RefCell<DaemonGuard>>) {
     });
     paste.connect_state_set(|_, on| {
         send(&format!("{{\"set\":{{\"auto_paste\":{on}}}}}"));
+        glib::Propagation::Proceed
+    });
+    hotkey_row.connect_selected_notify(move |row| {
+        let i = row.selected() as usize;
+        if let Some(v) = hotkey_vals.get(i) {
+            send(&format!("{{\"set\":{{\"hotkey\":\"{v}\"}}}}"));
+        }
+    });
+    mode.connect_state_set(|_, on| {
+        let m = if on { "toggle" } else { "push" };
+        send(&format!("{{\"set\":{{\"hotkey_mode\":\"{m}\"}}}}"));
         glib::Propagation::Proceed
     });
 

@@ -24,6 +24,8 @@ pub struct Shared {
     pub prompt: Arc<Mutex<String>>,
     pub recording: Arc<Mutex<bool>>,
     pub last: Arc<Mutex<(String, u128)>>,
+    pub hotkey: Arc<Mutex<String>>,
+    pub hotkey_mode: Arc<Mutex<String>>,
 }
 
 impl Shared {
@@ -38,6 +40,8 @@ impl Shared {
             "recording": self.recording.lock().map(|v| *v).unwrap_or(false),
             "last_text": self.last.lock().map(|v| v.0.clone()).unwrap_or_default(),
             "last_ms": self.last.lock().map(|v| v.1).unwrap_or(0),
+            "hotkey": get(&self.hotkey),
+            "hotkey_mode": get(&self.hotkey_mode),
         })
     }
 }
@@ -48,6 +52,8 @@ struct Set {
     model: Option<String>,
     auto_paste: Option<bool>,
     prompt: Option<String>,
+    hotkey: Option<String>,
+    hotkey_mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,6 +61,40 @@ struct Set {
 struct Req {
     status: Option<bool>,
     set: Option<Set>,
+}
+
+/// Сохранить текущее shared-состояние в config.toml.
+fn persist_from_shared(st: &Shared) {
+    let mut cfg = crate::config::load();
+    if let Ok(v) = st.lang.lock() {
+        cfg.language = Some(v.clone());
+    }
+    if let Ok(v) = st.model.lock() {
+        cfg.model = Some(v.clone());
+    }
+    if let Ok(v) = st.auto_paste.lock() {
+        cfg.auto_paste = Some(*v);
+    }
+    if let Ok(v) = st.prompt.lock() {
+        if !v.is_empty() {
+            cfg.prompt = Some(v.clone());
+        }
+    }
+    if let Ok(v) = st.hotkey.lock() {
+        if let Some(h) = crate::config::Hotkey::parse(&v) {
+            cfg.hotkey = Some(h);
+        }
+    }
+    if let Ok(v) = st.hotkey_mode.lock() {
+        cfg.hotkey_mode = Some(if v.as_str() == "toggle" {
+            crate::config::HotkeyMode::Toggle
+        } else {
+            crate::config::HotkeyMode::Push
+        });
+    }
+    if let Err(e) = crate::config::save(&cfg) {
+        eprintln!("[ctl] не могу сохранить конфиг: {e:#}");
+    }
 }
 
 #[derive(Serialize)]
@@ -114,6 +154,23 @@ pub fn serve(st: Shared) -> Result<()> {
                                 *p = v;
                             }
                         }
+                        if let Some(v) = set.hotkey {
+                            if crate::config::Hotkey::parse(&v).is_some() {
+                                if let Ok(mut h) = st.hotkey.lock() {
+                                    *h = v.to_lowercase();
+                                }
+                            }
+                        }
+                        if let Some(v) = set.hotkey_mode {
+                            let v = v.to_lowercase();
+                            if v == "toggle" || v == "push" {
+                                if let Ok(mut m) = st.hotkey_mode.lock() {
+                                    *m = v;
+                                }
+                            }
+                        }
+                        // Персистим в config.toml, чтобы переживало рестарты.
+                        persist_from_shared(&st);
                     }
                     st.snapshot().to_string()
                 }

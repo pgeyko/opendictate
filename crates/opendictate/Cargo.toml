@@ -1,6 +1,6 @@
 [package]
 name = "opendictate"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 [[bin]]
@@ -15,5 +15,7 @@ opendictate-tray = { path = "../opendictate-tray" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 evdev = "0.12"
+ksni = { version = "0.3", features = ["blocking"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
