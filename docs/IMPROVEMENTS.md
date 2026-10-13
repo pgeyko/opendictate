@@ -98,7 +98,7 @@ hotkey = "pause"        # pause | f12 | scrolllock (задел)
 
 ## 6. Фазы
 
-- [ ] **Фаза A (качество, без GUI)**: prompt, auto-lang, beam/temp, VAD+нормализация,
+- [x] **Фаза A (качество, без GUI)**: prompt, auto-lang, beam/temp, VAD+нормализация,
       пресеты моделей + `--model <preset>`, докачка, пункт «Модель» в трей.
 - [ ] **Фаза B (автовставка)**: uinput Ctrl+V, `auto_paste`, udev-правило в install.sh,
       `--no-auto-paste`, пункт в трей.
