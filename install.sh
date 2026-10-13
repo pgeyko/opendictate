@@ -23,9 +23,10 @@ echo "==============================================="
 echo "-> Сборка оптимизированного релизного бинарника..."
 cargo build --release
 
-echo "-> Копирование исполняемого файла в ${BIN_DIR}..."
+echo "-> Копирование исполняемых файлов в ${BIN_DIR}..."
 mkdir -p "${BIN_DIR}"
 install -m 755 target/release/opendictate "${BIN_DIR}/opendictate"
+install -m 755 target/release/opendictate-gui "${BIN_DIR}/opendictate-gui"
 
 echo "-> Установка иконок приложения..."
 mkdir -p "${ICON_BASE}/scalable/apps"
@@ -38,10 +39,12 @@ install -m 644 assets/opendictate.svg "${ICON_BASE}/scalable/apps/opendictate.sv
 [ -f assets/opendictate_64.png ] && install -m 644 assets/opendictate_64.png "${ICON_BASE}/64x64/apps/opendictate.png"
 [ -f assets/opendictate_128.png ] && install -m 644 assets/opendictate_128.png "${ICON_BASE}/128x128/apps/opendictate.png"
 
-echo "-> Установка десктоп-ярлыка меню..."
+echo "-> Установка десктоп-ярлыков меню..."
 mkdir -p "${APP_DIR}"
 install -m 644 assets/opendictate.desktop "${APP_DIR}/opendictate.desktop"
 sed -i "s|^Exec=.*|Exec=${BIN_DIR}/opendictate|" "${APP_DIR}/opendictate.desktop"
+install -m 644 assets/opendictate-gui.desktop "${APP_DIR}/opendictate-gui.desktop"
+sed -i "s|^Exec=.*|Exec=${BIN_DIR}/opendictate-gui|" "${APP_DIR}/opendictate-gui.desktop"
 
 echo "-> Настройка доступа к /dev/uinput (автовставка Ctrl+V)..."
 if [ "$(id -u)" -eq 0 ]; then

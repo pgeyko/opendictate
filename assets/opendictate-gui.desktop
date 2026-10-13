@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=OpenDictate Settings
+Name[ru]=Настройки OpenDictate
+GenericName=Voice Typing Settings
+GenericName[ru]=Настройки голосовой диктовки
+Comment=Configure Whisper models, language and auto-paste for OpenDictate
+Comment[ru]=Настройка моделей Whisper, языка и автовставки OpenDictate
+Exec=opendictate-gui
+Icon=opendictate
+Terminal=false
+Type=Application
+Categories=Utility;Accessibility;
+Keywords=voice;speech;dictation;stt;whisper;settings;
+StartupWMClass=opendictate-gui
+StartupNotify=true
