@@ -104,4 +104,4 @@ hotkey = "pause"        # pause | f12 | scrolllock (задел)
       `--auto-paste`, пункт в трей.
 - [x] **Фаза C (GUI)**: `opendictate-gui`, control-socket в демоне, секции
       Модель/Язык/Ввод/Статус, супервизор, `.desktop` + иконка.
-- [ ] **Фаза D (релиз)**: `install.sh`/`uninstall.sh` под всё, README, версия 0.2.0.
+- [x] **Фаза D (релиз)**: `install.sh`/`uninstall.sh` под всё, README, версия 0.2.0.
