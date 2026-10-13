@@ -100,8 +100,8 @@ hotkey = "pause"        # pause | f12 | scrolllock (задел)
 
 - [x] **Фаза A (качество, без GUI)**: prompt, auto-lang, beam/temp, VAD+нормализация,
       пресеты моделей + `--model <preset>`, докачка, пункт «Модель» в трей.
-- [ ] **Фаза B (автовставка)**: uinput Ctrl+V, `auto_paste`, udev-правило в install.sh,
-      `--no-auto-paste`, пункт в трей.
+- [x] **Фаза B (автовставка)**: uinput Ctrl+V, `auto_paste`, udev-правило в install.sh,
+      `--auto-paste`, пункт в трей.
 - [ ] **Фаза C (GUI)**: `opendictate-gui`, control-socket в демоне, секции
       Модель/Язык/Ввод/Статус, супервизор, `.desktop` + иконка.
 - [ ] **Фаза D (релиз)**: `install.sh`/`uninstall.sh` под всё, README, версия 0.2.0.
