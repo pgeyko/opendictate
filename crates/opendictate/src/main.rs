@@ -27,14 +27,26 @@ struct Args {
     /// Путь к весам модели whisper (.bin)
     #[arg(short, long)]
     model: Option<PathBuf>,
+
+    /// Включить отладочный режим с подробными логами
+    #[arg(short, long, default_value = "false")]
+    debug: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    eprintln!("=======================================================");
-    eprintln!("   OpenDictate — Система голосовой диктовки для Linux   ");
-    eprintln!("=======================================================");
+    // Включаем отладочный режим если флаг --debug
+    if args.debug {
+        opendictate_stt::debug::set_debug(true);
+        eprintln!("[info] Отладочный режим включён");
+    }
+
+    if args.debug {
+        eprintln!("=======================================================");
+        eprintln!("   OpenDictate — Система голосовой диктовки для Linux   ");
+        eprintln!("=======================================================");
+    }
 
     let model_path = args.model.unwrap_or_else(default_model_path);
     eprintln!("[init] Инициализация движка Whisper: {}", model_path.display());
@@ -47,10 +59,14 @@ fn main() -> Result<()> {
 
     let injector = TextInjector::new();
 
-    eprintln!("\nГотово! Инструкция:");
-    eprintln!("-> Нажмите и удерживайте клавишу [Pause] (или ScrollLock), чтобы говорить.");
-    eprintln!("-> Отпустите клавишу, чтобы закончить фразу и скопировать текст.");
-    eprintln!("(Текст копируется в системный буфер обмена: доступен по Ctrl+V)\n");
+    if !args.debug {
+        eprintln!("\nГотово! Инструкция:");
+        eprintln!("-> Нажмите и удерживайте клавишу [Pause] (или ScrollLock), чтобы говорить.");
+        eprintln!("-> Отпустите клавишу, чтобы закончить фразу и скопировать текст.");
+        eprintln!("(Текст копируется в системный буфер обмена: доступен по Ctrl+V)\n");
+    } else {
+        opendictate_stt::debug::debug_msg("Пропускаю вывод инструкции (режим отладки)");
+    }
 
     let is_recording_bool = Arc::new(std::sync::Mutex::new(false));
     let lang_mutex = Arc::new(std::sync::Mutex::new(args.language.clone()));

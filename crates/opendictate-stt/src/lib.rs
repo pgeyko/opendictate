@@ -13,6 +13,8 @@ use std::process::Command;
 pub const DEFAULT_MODEL_NAME: &str = "ggml-base.bin";
 pub const DEFAULT_MODEL_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin";
 
+pub mod debug;
+
 pub struct SttEngine {
     model_path: PathBuf,
     cli_bin: PathBuf,
@@ -21,11 +23,16 @@ pub struct SttEngine {
 impl SttEngine {
     pub fn new<P: AsRef<Path>>(model_path: P) -> Result<Self> {
         let path = model_path.as_ref().to_path_buf();
+        debug::debug_msg(&format!("Инициализация STT движка, модель: {}", path.display()));
         if !path.exists() {
+            debug::debug_msg("Модель не найдена локально, скачиваю...");
             ensure_model_downloaded(&path, DEFAULT_MODEL_URL)?;
+            debug::debug_msg("Модель успешно скачана");
         }
 
         let cli_bin = ensure_whisper_cli()?;
+        debug::debug_msg(&format!("whisper-cli найден: {}", cli_bin.display()));
+        debug::debug_msg(&format!("Размер модели: {}", path.metadata().map(|m| m.len()).unwrap_or(0)));
 
         Ok(Self {
             model_path: path,
@@ -36,16 +43,30 @@ impl SttEngine {
     /// Распознать 16 кГц моно PCM (сэмплы f32 в диапазоне -1.0..1.0)
     pub fn transcribe(&mut self, audio: &[f32], language: Option<&str>) -> Result<String> {
         if audio.is_empty() {
+            debug::debug_msg("Пустой аудио буфер, пропускаю распознавание");
             return Ok(String::new());
         }
 
         // Сохраняем временный 16 кГц WAV файл
         let tmp_wav = std::env::temp_dir().join(format!("opendictate_rec_{}.wav", std::process::id()));
+        debug::debug_msg(&format!(
+            "Создаю WAV файл: {} ({} сэмплов, {} сек)",
+            tmp_wav.display(),
+            audio.len(),
+            audio.len() / 16000_usize as usize
+        ));
         write_wav(&tmp_wav, audio)?;
 
         let lang = language.unwrap_or("ru");
+        debug::debug_msg(&format!(
+            "Запуск whisper-cli: модель={}, wav={}, язык={}",
+            self.model_path.display(),
+            tmp_wav.display(),
+            lang
+        ));
 
         // Вызываем оптимизированный whisper-cli
+        let start = std::time::Instant::now();
         let output = Command::new(&self.cli_bin)
             .args([
                 "-m", self.model_path.to_str().unwrap(),
@@ -56,16 +77,24 @@ impl SttEngine {
             ])
             .output()
             .context("Ошибка выполнения whisper-cli")?;
+        let elapsed = start.elapsed();
+        debug::debug_msg(&format!("whisper-cli завершился за {:?}", elapsed));
 
         let _ = std::fs::remove_file(&tmp_wav);
+        debug::debug_msg("Временный WAV файл удалён");
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
+            debug::debug_msg(&format!("Ошибка whisper-cli: {}", err));
             anyhow::bail!("whisper-cli завершился с ошибкой: {}", err);
         }
 
         let text = String::from_utf8_lossy(&output.stdout);
-        Ok(clean_transcription(&text))
+        debug::debug_msg(&format!("Сырой вывод whisper-cli:\n{}", text));
+        let cleaned = clean_transcription(&text);
+        debug::debug_msg(&format!("Очищенный текст: \"{}\"", cleaned));
+
+        Ok(cleaned)
     }
 }
 
