@@ -9,6 +9,7 @@ pub struct DictateTray {
     pub is_recording: Arc<Mutex<bool>>,
     pub language: Arc<Mutex<String>>,
     pub model: Arc<Mutex<String>>,
+    pub auto_paste: Arc<Mutex<bool>>,
 }
 
 impl Tray for DictateTray {
@@ -100,6 +101,17 @@ impl Tray for DictateTray {
             }
             .into(),
             MenuItem::Separator,
+            CheckmarkItem {
+                label: "Автовставка Ctrl+V".into(),
+                checked: self.auto_paste.lock().map(|v| *v).unwrap_or(false),
+                activate: Box::new(|this: &mut Self| {
+                    if let Ok(mut v) = this.auto_paste.lock() {
+                        *v = !*v;
+                    }
+                }),
+                ..Default::default()
+            }
+            .into(),
             StandardItem {
                 label: "Выход".into(),
                 activate: Box::new(|_| {
@@ -116,11 +128,13 @@ pub fn spawn_tray(
     is_recording: Arc<Mutex<bool>>,
     language: Arc<Mutex<String>>,
     model: Arc<Mutex<String>>,
+    auto_paste: Arc<Mutex<bool>>,
 ) -> anyhow::Result<ksni::blocking::Handle<DictateTray>> {
     let tray = DictateTray {
         is_recording,
         language,
         model,
+        auto_paste,
     };
     let handle = tray.spawn()?;
     Ok(handle)

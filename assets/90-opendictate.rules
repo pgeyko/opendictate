@@ -1,0 +1,3 @@
+# OpenDictate: доступ к виртуальной клавиатуре для автовставки Ctrl+V.
+# Пользователь уже состоит в группе input (нужна для перехвата хоткея evdev).
+KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"

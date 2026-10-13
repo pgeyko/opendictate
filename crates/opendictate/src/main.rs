@@ -32,6 +32,10 @@ struct Args {
     #[arg(long, default_value = "5")]
     beam: u32,
 
+    /// Автовставка Ctrl+V после распознавания (по умолчанию вкл)
+    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
+    auto_paste: bool,
+
     /// Initial prompt (подсказка-контекст; пусто = встроенный IT-пrompt)
     #[arg(long)]
     prompt: Option<String>,
@@ -82,6 +86,15 @@ fn main() -> Result<()> {
     eprintln!("[init] Захват звука с микрофона (PipeWire/parec) активен.");
 
     let injector = TextInjector::new();
+    let mut paster = opendictate_input::AutoPaster::new();
+    let auto_paste_mutex = Arc::new(std::sync::Mutex::new(args.auto_paste));
+    if args.auto_paste {
+        if paster.is_available() {
+            eprintln!("[init] Автовставка Ctrl+V через uinput активна.");
+        } else {
+            eprintln!("[init] Автовставка недоступна (нет /dev/uinput) — только буфер обмена.");
+        }
+    }
 
     if !args.debug {
         eprintln!("\nГотово! Инструкция:");
@@ -101,6 +114,7 @@ fn main() -> Result<()> {
         is_recording_bool.clone(),
         lang_mutex.clone(),
         model_mutex.clone(),
+        auto_paste_mutex.clone(),
     )
     .ok();
     if tray_handle.is_some() {
@@ -210,8 +224,19 @@ fn main() -> Result<()> {
                         eprintln!("[stt] Распознано за {} мс: \"{}\"", elapsed, text);
                         if let Err(e) = injector.copy_to_clipboard(&text) {
                             eprintln!("[input] Ошибка копирования в буфер: {e}");
+                            continue;
+                        }
+                        let paste_on = auto_paste_mutex
+                            .lock()
+                            .map(|v| *v)
+                            .unwrap_or(false);
+                        if paste_on {
+                            match paster.paste() {
+                                Ok(()) => eprintln!("[input] Вставлено через Ctrl+V"),
+                                Err(e) => eprintln!("[input] Автовставка не удалась ({e:#}); текст в буфере, нажмите Ctrl+V"),
+                            }
                         } else {
-                            eprintln!("[input] Текст скопирован в буфер обмена (нажмите Ctrl+V для вставки)");
+                            eprintln!("[input] Текст в буфере обмена (нажмите Ctrl+V для вставки)");
                         }
                     }
                 }

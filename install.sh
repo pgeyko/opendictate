@@ -43,6 +43,20 @@ mkdir -p "${APP_DIR}"
 install -m 644 assets/opendictate.desktop "${APP_DIR}/opendictate.desktop"
 sed -i "s|^Exec=.*|Exec=${BIN_DIR}/opendictate|" "${APP_DIR}/opendictate.desktop"
 
+echo "-> Настройка доступа к /dev/uinput (автовставка Ctrl+V)..."
+if [ "$(id -u)" -eq 0 ]; then
+    install -m 644 assets/90-opendictate.rules /etc/udev/rules.d/90-opendictate.rules
+    udevadm trigger /dev/uinput 2>/dev/null || true
+    echo "   udev-правило установлено."
+else
+    if [ -w /dev/uinput ]; then
+        echo "   /dev/uinput уже доступен для записи."
+    else
+        echo "   [sudo] Для автовставки выполните один раз:"
+        echo "   sudo install -m644 assets/90-opendictate.rules /etc/udev/rules.d/ && sudo udevadm trigger /dev/uinput"
+    fi
+fi
+
 echo "-> Обновление баз данных окружения..."
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "${APP_DIR}" 2>/dev/null || true
